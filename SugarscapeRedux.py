@@ -35,6 +35,7 @@ class Agent:
         self.metab = next(agentMetabDist)
 
         self.site = None
+        self.partner = None
         self.gestating = False
         # self.setNextEvent()
 
@@ -95,6 +96,10 @@ class Agent:
     def findPartner(self):
         sitesInSight = self.getNeighborhood()
         bestAgent = max([site.agent for site in sitesInSight if site.agent != self and not site.empty()], default = None, key= lambda agent : agent.sugar)
+        if bestAgent != None:
+            self.partner = bestAgent
+            self.gestating = True
+
         print(bestAgent.id, "is best agent.") if bestAgent != None else print("No agent in sight for romeo.")
 
     # def giveBirth(self, partner):
