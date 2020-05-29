@@ -10,6 +10,12 @@ def randseq(distro):
             val = distro(*args)
     return seq
 
+class Event:
+    def __init__(self, action, time, params):
+        self.action = action
+        self.time = time
+        self.params = params
+
 class Agent:
     # static variables
     num = 0
@@ -25,6 +31,7 @@ class Agent:
         self.metab = next(agentMetabDist)
 
         self.site = None
+        self.setNextEvent()
 
     def getNeighborhood(self):
         sitesInSight = []
