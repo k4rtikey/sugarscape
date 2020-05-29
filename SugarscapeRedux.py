@@ -1,4 +1,6 @@
 # refactored version of Sugarscape model. More modular, extensible, and maybe slightly more efficient than previous versions.
+# future improvements: use a tuple unpacking approach instead of multiple returns approach with position() function
+
 import random
 
 # function returns a generator of random values drawn from provided distribution
@@ -24,6 +26,8 @@ class Agent:
         self.id = Agent.num
         Agent.num += 1
 
+        self.actions = {self.move : next(intermovement), self.die : float("inf")}
+
         # self.tsync = 0.0 # last time at which the agent's last state update occurred
 
         self.sugar = 0
@@ -31,7 +35,24 @@ class Agent:
         self.metab = next(agentMetabDist)
 
         self.site = None
-        self.setNextEvent()
+        self.gestating = False
+        # self.setNextEvent()
+
+    # def setNextEvent(self):
+    #     nextAction = min(self.actions, key= lambda action : self.actions[action])
+    #     cancelled = False
+    #
+    #     if nextAction == self.move:
+    #         X, Y = self.site.position()
+    #         if (Site.sugScape[X][Y].regen < self.metab) and ((-self.sugar/(Site.sugScape[X][Y].regen-self.metab)) <= self.actions[self.move]):
+    #             nextAction = self.die
+    #
+    #         if self.gestating:  nextAction = self.giveBirth
+    #
+    #     if nextAction == self.giveBirth:
+
+
+
 
     def getNeighborhood(self):
         sitesInSight = []
@@ -70,6 +91,13 @@ class Agent:
         chosenSite.putAgent(Agent())
         print(self.id, " has died. RIP")
         Site.sugScape[X][Y].agent = None
+
+    def findPartner(self):
+        sitesInSight = self.getNeighborhood()
+        bestAgent = max([site.agent for site in sitesInSight if site.agent != self and not site.empty()], default = None, key= lambda agent : agent.sugar)
+        print(bestAgent.id, "is best agent.") if bestAgent != None else print("No agent in sight for romeo.")
+
+    # def giveBirth(self, partner):
 
     def update(self):
         self.sugar += (Site.sugScape.time - self.site.tsync)*(self.site.regen - self.metab)
@@ -191,7 +219,7 @@ class Sugarscape:
 
 random.seed(8675309)
 
-agentDensity = 0.6
+agentDensity = 0.9
 
 agentVisionDist = randseq( random.randint )(1,3)
 agentMetabDist = randseq( random.expovariate )(2)
@@ -221,7 +249,14 @@ siteRegenDist = randseq( random.random )()
     # print(a.id, " ", a.sugar, " ", a.vision, " ", a.metab, " ", a.tsync)
 s = Sugarscape(10)
 Site.sugScape = s
-# s.populate()
+
+s[0][0].putAgent(Agent())
+
+s.populate()
+
+s[0][0].agent.findPartner()
+
+s.populate()
 #
 # s[0][0].putAgent(Agent())
 # s[0][0].agent.die()
