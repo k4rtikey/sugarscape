@@ -57,6 +57,12 @@ class Agent:
         # self.eventTimes[EType.MOVE.value] += self.getInterMovement()
         # self.setNextEvent()
 
+    def die(self):
+        X, Y = self.site.position()
+        chosenSite = random.choice(list(Site.sugScape.emptySites))
+        chosenSite.putAgent(Agent())
+        print(self.id, " has died. RIP")
+        Site.sugScape[X][Y].agent = None
 
     def update(self):
         self.sugar += (Site.sugScape.time - self.site.tsync)*(self.site.regen - self.metab)
@@ -122,7 +128,7 @@ class Sugarscape:
                 if random.random() <= agentDensity:
                     a = Agent()
                     site.putAgent(a)
-                    agents.append(a)
+                    # agents.append(a)
                     self.emptySites.discard(site)
 
     def update(self):
@@ -202,14 +208,24 @@ siteRegenDist = randseq( random.random )()
 
 
 ################################# MAIN #########################################
-agents = []
+# agents = []
 
     # a = Agent()
     # print(a.id, " ", a.sugar, " ", a.vision, " ", a.metab, " ", a.tsync)
 s = Sugarscape(10)
-s.populate()
-
 Site.sugScape = s
+# s.populate()
+#
+# s[0][0].putAgent(Agent())
+# s[0][0].agent.die()
+#
+# s.time = 4.0
+#
+#
+# print("Sugar level: ", s[0][0].sugar)
+#
+#
+# Site.sugScape = s
 
 
 # s[0][0].putAgent(Agent())
