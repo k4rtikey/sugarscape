@@ -4,7 +4,7 @@
 # sugar level at time of death is reeeeeally close to 0 but not actually 0 even though the time of death is right. Seems to be right at other, non-death times.
 # setNextEvent() stops occurring pretty soon.
 # put in assert statements to debug
-# you didn't(?) cancel events already scheduled that took place within the gestation period
+# you didn't(?) cancel events already scheduled that took place within the gestation period, FIND WAYS TO CANCEL THEM. PRIORITY!!!!!!!
 # set() causes weird errors because of randomization
 
 import random
@@ -72,6 +72,7 @@ class Agent:
             for e in calendar:
                 if e.action == self.partner.giveBirth:
                     calendar.remove(e)
+
 
 
         bisect.insort(calendar, Event(nextAction, self.actions[nextAction], params))
@@ -164,7 +165,7 @@ class Agent:
 
         self.partner.gestating = False
         self.partner.partner = None
-        self.gestating = None
+        self.gestating = False
         self.partner = None
         self.actions[self.giveBirth] = float("inf")
         self.setNextEvent()
