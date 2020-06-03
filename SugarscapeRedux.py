@@ -66,6 +66,11 @@ class Agent:
         # time at which sugar goes to 0 satisfies: agent's init sugar + t*(site's regen rate - self.metabolism) = cur sugar = 0s
         if (self.site.regen < self.metab) and ((-self.sugar/(self.site.regen-self.metab)) <= self.actions[nextAction]):
             nextAction = self.die
+            if self.gestating:
+                for e in calendar:
+                    if e.time > Site.sugScape.time and e.action == self.giveBirth or e.action == self.partner.giveBirth:
+                        calendar.remove(e)
+
             self.actions[self.die] = -(self.sugar/(self.site.regen-self.metab))+Site.sugScape.time
 
         if nextAction != self.die and self.gestating:
@@ -92,7 +97,11 @@ class Agent:
         # if nextAction == self.giveBirth:
 
 
-
+    def cancelEvents(self):
+        for e in calendar:
+            if e.time > Site.sugScape.time and e.time < self.actions[self.giveBirth]:
+                if e.action in self.actions and e.action != self.die or e.action in self.partner.actions and e.action != self.partner.die:
+                    calendar.remove(e)
 
     def getNeighborhood(self):
         sitesInSight = []
@@ -157,7 +166,7 @@ class Agent:
             self.gestating = True
             bestAgent.gestating = True
             self.actions[self.giveBirth] = Site.sugScape.time + next(gestationperiod)
-
+            self.cancelEvents()
 
         print(bestAgent.id, "is best agent for", self.id) if bestAgent != None else print("No partner in sight for", self.id)
 
@@ -166,7 +175,8 @@ class Agent:
 
     def giveBirth(self):
         print("Parent", self.id, "is giving birth.")
-        sitesInSight = set(self.getNeighborhood()) | set(self.partner.getNeighborhood()) # | signifies the union operator
+        sitesInSight = self.getNeighborhood()
+        sitesInSight.extend(self.partner.getNeighborhood())
 
         bestSite = max([site for site in sitesInSight if site.empty()], default = None, key = lambda site : site.sugar)
 
@@ -265,6 +275,7 @@ class Sugarscape:
 
     # print could be improved in the future, to include a lambda function to determine what's printed
     def print(self):
+
         for row in self.grid:
             toPrint = []
             for site in row:
@@ -279,19 +290,19 @@ class Sugarscape:
 
 random.seed(8657309)
 
-agentDensity = 0.9
+agentDensity = 0.5
 
 agentVisionDist = randseq( random.randint )(1,2)
-agentMetabDist = randseq( random.gammavariate )(1,1)
+agentMetabDist = randseq( random.uniform )(10.0,11.0)
 intermovement = randseq( random.expovariate )(2)
-interreproduce = randseq( random.expovariate )(0.75)
+interreproduce = randseq( random.expovariate )(2)
 gestationperiod = randseq( random.uniform )(0.0, 1.0)
 
-siteCapDist = randseq( random.uniform )(0.0, 3.0)
+siteCapDist = randseq( random.uniform )(0.0, 1.0)
 siteSugarDist = randseq( random.uniform )(0.0, 3.0)
 siteRegenDist = randseq( random.random )()
 
-
+tmax = 15
 ################################# MAIN #########################################
 
 s = Sugarscape(10)
@@ -307,7 +318,7 @@ for row in Site.sugScape:
         if site.agent != None:
             site.agent.setNextEvent()
 
-tmax = 15
+
 
 for row in Site.sugScape:
     for site in row:
@@ -320,7 +331,3 @@ while Site.sugScape.time < tmax and len(calendar) > 0:
     Site.sugScape.update()
     calendar.remove(e)
     e.action(*e.params)
-
-
-
-print(Site.sugScape.time)
