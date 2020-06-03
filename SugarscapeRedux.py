@@ -78,7 +78,7 @@ class Agent:
 
 
         bisect.insort(calendar, Event(nextAction, self.actions[nextAction], params))
-        mino = min(self.actions, key= lambda action : self.actions[action])
+        # mino = min(self.actions, key= lambda action : self.actions[action])
         # if self.actions[mino] < 0:    print(mino, self.actions[mino], "HOOOOOOOO")
 
 
@@ -117,8 +117,6 @@ class Agent:
         self.site.agent = None
         Site.sugScape.emptySites.append(self.site)
 
-        print(self.site)
-
         maxSugSite = max(emptySitesInSight, default= self.site, key= lambda s : s.sugar)
 
         maxSugSite.putAgent(self)
@@ -147,25 +145,29 @@ class Agent:
     def findPartner(self):
         sitesInSight = self.getNeighborhood()
         # THIS LINE DOESN'T PREVENT BEST AGENT TO BE A NON-GESTATING AGENT. FIX THIS TOO
-        bestAgent = max([site.agent for site in sitesInSight if site.agent != self and not site.empty()], default = None, key= lambda agent : agent.sugar)
+        filledSitesInSight = list(filter(lambda site : True if not site.empty() else False, sitesInSight))
+        availableAgentSites = list(filter(lambda site : True if (not site.agent.gestating and site.agent != self) else False, filledSitesInSight))
+        bestAgentSite = max(availableAgentSites, default = None, key= lambda agent : agent.sugar)
+        bestAgent = None
+        if bestAgentSite != None:   bestAgent = bestAgentSite.agent
+
         if bestAgent != None:
             self.partner = bestAgent
             bestAgent.partner = self
             self.gestating = True
             bestAgent.gestating = True
             self.actions[self.giveBirth] = Site.sugScape.time + next(gestationperiod)
-            print(self.id, self.partner.id)
 
-        print(bestAgent.id, "is best agent.") if bestAgent != None else print("No agent in sight for romeo.")
+
+        print(bestAgent.id, "is best agent for", self.id) if bestAgent != None else print("No partner in sight for", self.id)
 
         self.actions[self.findPartner] += next(interreproduce)
         self.setNextEvent()
 
     def giveBirth(self):
-        print("Parent", self.id)
+        print("Parent", self.id, "is giving birth.")
         sitesInSight = set(self.getNeighborhood()) | set(self.partner.getNeighborhood()) # | signifies the union operator
-        for s in sitesInSight:
-            print(*s.position())
+
         bestSite = max([site for site in sitesInSight if site.empty()], default = None, key = lambda site : site.sugar)
 
         if bestSite != None:
@@ -176,12 +178,17 @@ class Agent:
             print("Parents", self.id, self.partner.id, "welcome new baby new baby agent at", *bestSite.position(), ".")
 
         #else:   print("Oops, no new baby born. :(")
+        # cancel partner births
+        for e in calendar:
+            if e.action == self.partner.giveBirth:
+                calendar.remove(e)
 
         self.partner.gestating = False
-        # self.partner.partner = None # THIS LINE IS PROBABLY CAUSING PROBLEMS
+        self.partner.partner = None # THIS LINE IS PROBABLY CAUSING PROBLEMS
         self.gestating = False
         self.partner = None
         self.actions[self.giveBirth] = float("inf")
+
         self.setNextEvent()
 
     def update(self):
