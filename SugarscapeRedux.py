@@ -7,9 +7,11 @@
 # you didn't(?) cancel events already scheduled that took place within the gestation period, FIND WAYS TO CANCEL THEM. PRIORITY!!!!!!!
 # set() causes weird errors because of randomization
 
+
 import random
 import bisect
 import functools
+import pdb
 
 # function returns a generator of random values drawn from provided distribution
 def randseq(distro):
@@ -67,7 +69,7 @@ class Agent:
             self.actions[self.die] = -(self.sugar/(self.site.regen-self.metab))+Site.sugScape.time
 
         if nextAction != self.die and self.gestating:
-            nextAction = self.giveBirth
+            nextAction = self.giveBirth # weeeeeird behavior, if you put this after the for loop (not even inside) then it throws an error
             # cancel all events scheduled for gestation!!
             for e in calendar:
                 if e.action == self.partner.giveBirth:
@@ -111,14 +113,19 @@ class Agent:
         emptySitesInSight = list(filter(lambda site : True if site.empty() else False, sitesInSight))
 
         x, y = self.site.position()
-        Site.sugScape[x][y].agent = None
-        Site.sugScape.emptySites.add(self.site)
 
-        maxSugSite = max(emptySitesInSight, default= Site.sugScape[x][y], key= lambda s : s.sugar)
+        self.site.agent = None
+        Site.sugScape.emptySites.append(self.site)
+
+        print(self.site)
+
+        maxSugSite = max(emptySitesInSight, default= self.site, key= lambda s : s.sugar)
 
         maxSugSite.putAgent(self)
+
+
         # self.sugar -= self.metab should this be included?
-        if (self.id == 27): print(self.id, " moved.")
+        print(self.id, " moved.")
 
         self.actions[self.move] += next(intermovement)
         # self.eventTimes[EType.MOVE.value] += self.getInterMovement()
@@ -127,14 +134,19 @@ class Agent:
     def die(self):
         X, Y = self.site.position()
         chosenSite = self.site
-        if len(Site.sugScape.emptySites) > 0:    chosenSite = random.choice(list(Site.sugScape.emptySites))
-        Site.sugScape.emptySites.discard(chosenSite)
+        Site.sugScape[X][Y].agent = None
+        Site.sugScape.emptySites.append(chosenSite)
+
+        if len(Site.sugScape.emptySites) > 0:
+            chosenSite = random.choice(Site.sugScape.emptySites)
+
         chosenSite.putAgent(Agent())
         print(self.id, " has died. RIP")
-        Site.sugScape[X][Y].agent = None
+
 
     def findPartner(self):
         sitesInSight = self.getNeighborhood()
+        # THIS LINE DOESN'T PREVENT BEST AGENT TO BE A NON-GESTATING AGENT. FIX THIS TOO
         bestAgent = max([site.agent for site in sitesInSight if site.agent != self and not site.empty()], default = None, key= lambda agent : agent.sugar)
         if bestAgent != None:
             self.partner = bestAgent
@@ -152,6 +164,8 @@ class Agent:
     def giveBirth(self):
         print("Parent", self.id)
         sitesInSight = set(self.getNeighborhood()) | set(self.partner.getNeighborhood()) # | signifies the union operator
+        for s in sitesInSight:
+            print(*s.position())
         bestSite = max([site for site in sitesInSight if site.empty()], default = None, key = lambda site : site.sugar)
 
         if bestSite != None:
@@ -159,12 +173,12 @@ class Agent:
             bestSite.agent.sugar = (self.sugar+self.partner.sugar)/2
             self.sugar /= 2
             self.partner.sugar /= 2
-            print("Parents", self.id, self.partner.id,"welcome new baby new baby agent at", *bestSite.position(), ".")
+            print("Parents", self.id, self.partner.id, "welcome new baby new baby agent at", *bestSite.position(), ".")
 
         #else:   print("Oops, no new baby born. :(")
 
         self.partner.gestating = False
-        self.partner.partner = None
+        # self.partner.partner = None # THIS LINE IS PROBABLY CAUSING PROBLEMS
         self.gestating = False
         self.partner = None
         self.actions[self.giveBirth] = float("inf")
@@ -204,7 +218,7 @@ class Site:
         agent.site = self
         agent.sugar += self.sugar
         self.sugar = 0
-        Site.sugScape.emptySites.discard(self)
+        Site.sugScape.emptySites.remove(self)
 
     def update(self):
         tDiff = Site.sugScape.time - self.tsync
@@ -221,7 +235,7 @@ class Sugarscape:
         self.time = 0.0
         self.length = length
         self.grid = [[Site(i,j) for j in range(length)] for i in range(length)]
-        self.emptySites = set([site for row in self.grid for site in row])
+        self.emptySites = [site for row in self.grid for site in row]
 
     def __getitem__(self, index):
         return self.grid[index]
@@ -258,7 +272,7 @@ class Sugarscape:
 
 random.seed(8657309)
 
-agentDensity = 0.7
+agentDensity = 0.9
 
 agentVisionDist = randseq( random.randint )(1,2)
 agentMetabDist = randseq( random.gammavariate )(1,1)
@@ -272,16 +286,11 @@ siteRegenDist = randseq( random.random )()
 
 
 ################################# MAIN #########################################
-# agents = []
 
-    # a = Agent()
-    # print(a.id, " ", a.sugar, " ", a.vision, " ", a.metab, " ", a.tsync)
 s = Sugarscape(10)
 Site.sugScape = s
 
 a = Agent()
-
-s[0][0].putAgent(a)
 
 
 s.populate()
@@ -298,13 +307,7 @@ for row in Site.sugScape:
         if site.agent != None and site.agent.id == 10:
             a = site.agent
 
-print("init sugar", a.sugar, "init regen", a.site.regen, "a.metab", a.metab)
-
-# for e in calendar:
-#     print(e.action, e.time)
-
 while Site.sugScape.time < tmax and len(calendar) > 0:
-    print(a.partner)
     e = calendar[0]
     Site.sugScape.time = e.time
     Site.sugScape.update()
@@ -314,42 +317,3 @@ while Site.sugScape.time < tmax and len(calendar) > 0:
 
 
 print(Site.sugScape.time)
-
-print("xxxxxxxxxxxxxxxxxxxxxxxxxxx")
-
-for e in calendar:
-    print(e.action)
-
-# s.print()
-
-#
-# s[0][0].putAgent(Agent())
-# s[0][0].agent.die()
-#
-# s.time = 4.0
-#
-#
-# print("Sugar level: ", s[0][0].sugar)
-#
-#
-# Site.sugScape = s
-
-
-# s[0][0].putAgent(Agent())
-#     # print(len(agents))
-#
-# s.print()
-#
-# a = s[0][0].agent
-#
-# print("\n \n \n")
-#
-# while Site.sugScape.time < 10.0:
-#     a.move()
-#     for row in Site.sugScape:
-#         for site in row:
-#             site.update()
-#
-#     Site.sugScape.time += 2
-#
-# s.print()
