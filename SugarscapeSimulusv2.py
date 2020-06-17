@@ -12,16 +12,16 @@ def randseq(distro):
     return seq
 
 numStreams = 9
-seed = 8675309
+seed = 42435
 sg = SeedSequence(seed)
 streams = [Generator(Philox(s)) for s in sg.spawn(numStreams)]
 
-agentDensity = 0.9
+agentDensity = 0.2
 
-agentVisionDist = randseq( streams[0].integers )(1,2)
+agentVisionDist = randseq( streams[0].integers )(1,3)
 agentMetabDist = randseq( streams[1].uniform )(2.0, 3.0)
-intermovement = randseq( random.uniform )(100.0,110.0) # randseq( streams[2].exponential )(1)
-interreproduce = randseq( streams[3].exponential )(2)
+intermovement = randseq( streams[2].exponential )(1)
+interreproduce = randseq( streams[3].exponential )(1)
 gestationperiod = randseq( streams[4].uniform )(1.0, 2.0)
 
 siteCapDist = randseq( streams[5].uniform )(0.0, 5.0)
@@ -30,7 +30,7 @@ siteRegenDist = randseq( streams[7].uniform )(0.0,5.0)
 
 agentDeathLag = randseq( streams[8].uniform )(0.0, 1.0)
 
-tmax = 10
+tmax = 12.5
 
 # ============================================================================ #
 
