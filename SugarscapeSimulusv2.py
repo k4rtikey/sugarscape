@@ -16,11 +16,11 @@ seed = 8675309
 sg = SeedSequence(seed)
 streams = [Generator(Philox(s)) for s in sg.spawn(numStreams)]
 
-agentDensity = 0.9
+agentDensity = 0.5
 
 agentVisionDist = randseq( streams[0].integers )(1,2)
-agentMetabDist = randseq( streams[1].uniform )(2.0, 8.0)
-intermovement = randseq( streams[2].exponential )(1)
+agentMetabDist = randseq( streams[1].uniform )(2.0, 3.0)
+intermovement = randseq( random.uniform )(100.0,110.0) # randseq( streams[2].exponential )(1)
 interreproduce = randseq( streams[3].exponential )(2)
 gestationperiod = randseq( streams[4].uniform )(1.0, 2.0)
 
@@ -58,6 +58,7 @@ class Agent:
         self.times = []
         self.tods = []
         self.dead = False
+        self.log = []
 
 
     def schedule(self, action, timeOffset):
@@ -66,7 +67,8 @@ class Agent:
 
         if action == self.die:
             for e in self.events:
-                sim.cancel(e)
+                if e.time > self.tod()+sim.now:
+                    sim.cancel(e)
 
     def startEvents(self):
         nextMove = next(intermovement)
@@ -76,13 +78,14 @@ class Agent:
         self.schedule(self.findPartner, nextRep)
 
         tod = self.tod()+sim.now
+        ######### THIS PART MIGHT BE DUPLICATED IN THE SCHEDULE METHOD TOO, MAYBE REMOVE THIS ONE###
         for e in list(self.events.keys()):
             if e.time > tod:
                 sim.cancel(e)
                 del self.events[e]
-
-        if len(self.events) == 0:
-            sim.sched(self.die, offset = tod-sim.now+next(agentDeathLag))
+########################################
+        if tod != float("inf"):
+            self.schedule(self.die, tod-sim.now+next(agentDeathLag))
 
     # returns time from now at which agent will die.
     def tod(self):
@@ -106,8 +109,8 @@ class Agent:
         self.history[sim.now] = self.move
         print(self.id, "attempting to move at", sim.now)
         #########TESTING###########
-        if self.sugar < 0:
-            pdb.set_trace()
+        # if self.sugar < 0:
+        #     pdb.set_trace()
 ####################
         Site.sugScape.update()
         assert(self.site != None)
@@ -131,13 +134,16 @@ class Agent:
 
         nextMove = next(intermovement)
 
-        print(self.id, "is supposed to die at t =", self.tod())
+        logEntry = "tod is" + str(self.tod()+ sim.now) + "and nextMove is" + str(nextMove)
 
         if self.tod() > nextMove:
             self.schedule(self.move, nextMove)
-
+            logEntry += "chose to move."
         else:
             self.schedule(self.die, self.tod()+next(agentDeathLag))
+            logEntry += "chose to die."
+
+        self.log.append(logEntry)
 
 
     def die(self):
@@ -156,25 +162,126 @@ class Agent:
 
         chosenSite.initialize(Agent())
 
-        for e in self.events.keys():
-            sim.cancel(e)
+        # for e in self.events.keys():
+        #     sim.cancel(e)
 
         self.dead = True
         print(self.id, "has died. RIP.")
 
     def findPartner(self):
         if self.sugar < 0:
+            print("negative sugar prblm")
             pdb.set_trace()
 
         self.history[sim.now] = self.findPartner
-        print(self.id, "tried finding partner.")
+
+        print(self.id, "attempting to find partner.")
+
+        ##########testingonly##########
+        falsePartner = None
+        ##########################
+        if self.partner != None:
+            falsePartner = self.partner
+            print("already got a partner prblm")
+            pdb.set_trace()
+
+        # assert(self.partner == None)
+
+        Site.sugScape.update()
+        sitesInSight = self.getNeighborhood()
+        # THIS LINE DOESN'T PREVENT BEST AGENT TO BE A NON-GESTATING AGENT. FIX THIS TOO
+        filledSitesInSight = list(filter(lambda site : True if not site.empty() else False, sitesInSight))
+        availableAgentSites = list(filter(lambda site : True if (site.agent.partner == None and site.agent != self) else False, filledSitesInSight))
+
+        for s in availableAgentSites:
+            assert(s.agent.gestating == False and s.agent.partner == None)
+
+        bestAgent = None
+        term = 0
+        if len(availableAgentSites) > 0 and not self.gestating:
+            gestPeriod = next(gestationperiod)
+            # check if self will survive the term
+            if self.tod() > gestPeriod:
+
+                healthyAgentsSites = list(filter(lambda site: True if site.agent.tod() > gestPeriod else False, availableAgentSites))
+                bestAgentSite = max(healthyAgentsSites, default = None, key= lambda site : site.agent.sugar)
+
+                if bestAgentSite != None:   bestAgent = bestAgentSite.agent
+
+                if bestAgent != None:
+                    term = gestPeriod
+                    self.partner = bestAgent
+                    self.partner.partner = self
+                    self.gestating = True
+                    self.partner.gestating = True
+                    self.schedule(self.giveBirth, term)
+                    # pdb.set_trace()
+                    for e in list(self.events.keys()):
+                        if e.time > sim.now and e.time <= sim.now + term and e.func != self.giveBirth and e.func != self.partner.giveBirth:
+                            if e.time - sim.now < self.tod():
+                                self.events[e] = e.time+term
+                                sim.resched(e, until = e.time + term)
+                            else:
+                                if e.func != self.die:
+                                    sim.cancel(e)
+                                self.schedule(self.die, self.tod())
+
+                    for e in list(self.partner.events.keys()):
+                        if e.time > sim.now and e.time <= sim.now+ term and (e.func != self.giveBirth and e.func != self.partner.giveBirth):
+                            if e.time - sim.now < self.tod():
+                                self.partner.events[e] = e.time + term
+                                sim.resched(e, until = e.time + term)
+                            else:
+                                sim.cancel(e)
+                                self.schedule(self.die, self.tod())
+
+
+        print(bestAgent.id, "is best agent for", self.id) if bestAgent != None else print("No partner in sight for", self.id)
+
+
         nextRep = next(interreproduce)
 
-        if self.tod() > nextRep:
-            self.schedule(self.move, nextRep)
+        logEntry = "tod is" + str(self.tod()+ sim.now) + "and nextRep + term is" + str(nextRep+term+sim.now)
 
+        # if self.sugar < 0.05:
+        #     pdb.set_trace()
+
+        if self.tod() > nextRep+term:
+            self.schedule(self.findPartner, nextRep+term)
+            logEntry += "chose to find partner"
         else:
             self.schedule(self.die, self.tod()+next(agentDeathLag))
+            logEntry += "chose to die."
+
+        self.log.append(logEntry)
+
+    def giveBirth(self):
+        Site.sugScape.update()
+        self.history[sim.now] = self.giveBirth
+        print("Parent", self.id, "is giving birth with partner", self.partner.id)
+        sitesInSight = self.getNeighborhood()
+        sitesInSight.extend(self.partner.getNeighborhood())
+
+        bestSite = max([site for site in sitesInSight if site.empty()], default = None, key = lambda site : site.sugar)
+
+        if bestSite != None:
+            bestSite.initialize(Agent())
+            bestSite.agent.sugar = (self.sugar+self.partner.sugar)/2
+            self.sugar /= 2
+            self.partner.sugar /= 2
+            print("Parents", self.id, self.partner.id, "welcome new baby new baby agent at", *bestSite.position(), ".")
+
+        else:   print("Oops, no new baby born for parents", self.id, self.partner.id, ":(")
+
+        # print("checking out what happens during birth")
+        # pdb.set_trace()
+
+
+        self.partner.gestating = False
+        self.partner.partner = None # THIS LINE IS PROBABLY CAUSING PROBLEMS
+        self.gestating = False
+        self.partner = None
+
 
     def update(self):
         if sim.now == 0:
