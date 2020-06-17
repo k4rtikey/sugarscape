@@ -16,7 +16,7 @@ seed = 8675309
 sg = SeedSequence(seed)
 streams = [Generator(Philox(s)) for s in sg.spawn(numStreams)]
 
-agentDensity = 0.5
+agentDensity = 0.9
 
 agentVisionDist = randseq( streams[0].integers )(1,2)
 agentMetabDist = randseq( streams[1].uniform )(2.0, 3.0)
@@ -30,7 +30,7 @@ siteRegenDist = randseq( streams[7].uniform )(0.0,5.0)
 
 agentDeathLag = randseq( streams[8].uniform )(0.0, 1.0)
 
-tmax = 5
+tmax = 10
 
 # ============================================================================ #
 
@@ -57,35 +57,40 @@ class Agent:
         self.sugarhist = []
         self.times = []
         self.tods = []
-        self.dead = False
         self.log = []
+        self.cancelled = {}
+############# FOR TESTING ONLY ###################
+    def pevents(self):
+        for e in self.events:
+            print(e.func, e.time)
 
+    def pcancelled(self):
+        for e in self.cancelled:
+            print(e.func, e.time)
+##################################################
 
     def schedule(self, action, timeOffset):
+        if action == self.die:
+            for e in list(self.events.keys()):
+                if e.time >= self.tod()+sim.now:
+                    self.cancelled[e] = self.events[e]
+                    sim.cancel(e)
+                    del self.events[e]
+
         e = sim.sched(action, offset = timeOffset)
         self.events[e] = sim.now+timeOffset
 
-        if action == self.die:
-            for e in self.events:
-                if e.time > self.tod()+sim.now:
-                    sim.cancel(e)
-
     def startEvents(self):
+        Site.sugScape.update()
+
         nextMove = next(intermovement)
         nextRep = next(interreproduce)
 
         self.schedule(self.move, nextMove)
         self.schedule(self.findPartner, nextRep)
 
-        tod = self.tod()+sim.now
-        ######### THIS PART MIGHT BE DUPLICATED IN THE SCHEDULE METHOD TOO, MAYBE REMOVE THIS ONE###
-        for e in list(self.events.keys()):
-            if e.time > tod:
-                sim.cancel(e)
-                del self.events[e]
-########################################
-        if tod != float("inf"):
-            self.schedule(self.die, tod-sim.now+next(agentDeathLag))
+        if self.tod()+sim.now != float("inf"):
+            self.schedule(self.die, self.tod()+next(agentDeathLag))
 
     # returns time from now at which agent will die.
     def tod(self):
@@ -134,21 +139,19 @@ class Agent:
 
         nextMove = next(intermovement)
 
-        logEntry = "tod is" + str(self.tod()+ sim.now) + "and nextMove is" + str(nextMove)
+        logEntry = "tod is " + str(self.tod()+ sim.now) + " and time of nextMove is " + str(nextMove+sim.now)
 
         if self.tod() > nextMove:
             self.schedule(self.move, nextMove)
-            logEntry += "chose to move."
+            logEntry += " chose to move."
         else:
             self.schedule(self.die, self.tod()+next(agentDeathLag))
-            logEntry += "chose to die."
+            logEntry += " chose to die."
 
         self.log.append(logEntry)
 
 
     def die(self):
-        print(self.id, "died at", sim.now)
-
         self.history[sim.now] = self.die
 
         Site.sugScape.update()
@@ -161,12 +164,10 @@ class Agent:
             chosenSite = random.choice(Site.sugScape.emptySites)
 
         chosenSite.initialize(Agent())
-
-        # for e in self.events.keys():
-        #     sim.cancel(e)
-
-        self.dead = True
+        for e in self.events:
+            if e.time > sim.now: sim.cancel(e)
         print(self.id, "has died. RIP.")
+        del self # this line miiiight cause problems
 
     def findPartner(self):
         if self.sugar < 0:
@@ -241,17 +242,17 @@ class Agent:
 
         nextRep = next(interreproduce)
 
-        logEntry = "tod is" + str(self.tod()+ sim.now) + "and nextRep + term is" + str(nextRep+term+sim.now)
+        logEntry = "tod is " + str(self.tod()+ sim.now) + " and nextRep + term is " + str(nextRep+term+sim.now)
 
         # if self.sugar < 0.05:
         #     pdb.set_trace()
 
         if self.tod() > nextRep+term:
             self.schedule(self.findPartner, nextRep+term)
-            logEntry += "chose to find partner"
+            logEntry += " chose to find partner"
         else:
             self.schedule(self.die, self.tod()+next(agentDeathLag))
-            logEntry += "chose to die."
+            logEntry += " chose to die."
 
         self.log.append(logEntry)
 
@@ -270,8 +271,20 @@ class Agent:
             self.sugar /= 2
             self.partner.sugar /= 2
             print("Parents", self.id, self.partner.id, "welcome new baby new baby agent at", *bestSite.position(), ".")
+            # check if death has been preponed because of sugar split for self and partner
+            if self.tod() != float("inf"):
+                self.schedule(self.die, self.tod()+next(agentDeathLag))
 
-        else:   print("Oops, no new baby born for parents", self.id, self.partner.id, ":(")
+            if self.partner.tod() != float("inf"):
+                self.partner.schedule(self.partner.die, self.partner.tod()+next(agentDeathLag))
+
+        else:
+            print("Oops, no new baby born for parents", self.id, self.partner.id, ":(")
+            if self.tod() != float("inf"):
+                self.schedule(self.die, self.tod()+next(agentDeathLag))
+
+            if self.partner.tod() != float("inf"):
+                self.partner.schedule(self.partner.die, self.partner.tod()+next(agentDeathLag))
 
         # print("checking out what happens during birth")
         # pdb.set_trace()
@@ -284,9 +297,6 @@ class Agent:
 
 
     def update(self):
-        if sim.now == 0:
-            print("t = 0.0 update just occured for", self.id)
-
         self.sugar += (sim.now - self.site.tsync)*(self.site.regen - self.metab)
         self.sugarhist.append(self.sugar)
         self.times.append(sim.now)
