@@ -12,8 +12,9 @@ def randseq(distro):
     return seq
 
 numStreams = 9
-seed = 42435
+seed = 8745309
 sg = SeedSequence(seed)
+random.seed(seed)
 streams = [Generator(Philox(s)) for s in sg.spawn(numStreams)]
 
 agentDensity = 0.2
@@ -51,14 +52,14 @@ class Agent:
         self.site = None
         self.partner = None
         self.gestating = False
-        self.events = {}
+        self.events = []
 
-        self.history = {}
+        self.history = []
         self.sugarhist = []
         self.times = []
         self.tods = []
         self.log = []
-        self.cancelled = {}
+        self.cancelled = []
 ############# FOR TESTING ONLY ###################
     def pevents(self):
         for e in self.events:
@@ -70,15 +71,17 @@ class Agent:
 ##################################################
 
     def schedule(self, action, timeOffset):
+        # if self.id == 93:
+        #     pdb.set_trace()
+
         if action == self.die:
-            for e in list(self.events.keys()):
+            for e in self.events:
                 if e.time >= self.tod()+sim.now:
-                    self.cancelled[e] = self.events[e]
                     sim.cancel(e)
-                    del self.events[e]
+                    self.cancelled.append(e)
 
         e = sim.sched(action, offset = timeOffset)
-        self.events[e] = sim.now+timeOffset
+        self.events.append(e)
 
     def startEvents(self):
         Site.sugScape.update()
@@ -111,7 +114,7 @@ class Agent:
         return sitesInSight
 
     def move(self):
-        self.history[sim.now] = self.move
+        self.history.append(self.move)
         print(self.id, "attempting to move at", sim.now)
         #########TESTING###########
         # if self.sugar < 0:
@@ -152,7 +155,7 @@ class Agent:
 
 
     def die(self):
-        self.history[sim.now] = self.die
+        self.history.append(self.die)
 
         Site.sugScape.update()
         X, Y = self.site.position()
@@ -165,7 +168,10 @@ class Agent:
 
         chosenSite.initialize(Agent())
         for e in self.events:
-            if e.time > sim.now: sim.cancel(e)
+            if e.time > sim.now:
+                sim.cancel(e)
+                self.cancelled.append(e)
+
         print(self.id, "has died. RIP.")
         del self # this line miiiight cause problems
 
@@ -174,7 +180,7 @@ class Agent:
             print("negative sugar prblm")
             pdb.set_trace()
 
-        self.history[sim.now] = self.findPartner
+        self.history.append(self.findPartner)
 
         print(self.id, "attempting to find partner.")
 
@@ -217,20 +223,18 @@ class Agent:
                     self.partner.gestating = True
                     self.schedule(self.giveBirth, term)
                     # pdb.set_trace()
-                    for e in list(self.events.keys()):
+                    for e in self.events:
                         if e.time > sim.now and e.time <= sim.now + term and e.func != self.giveBirth and e.func != self.partner.giveBirth:
                             if e.time - sim.now < self.tod():
-                                self.events[e] = e.time+term
                                 sim.resched(e, until = e.time + term)
                             else:
                                 if e.func != self.die:
                                     sim.cancel(e)
                                 self.schedule(self.die, self.tod())
 
-                    for e in list(self.partner.events.keys()):
+                    for e in self.partner.events:
                         if e.time > sim.now and e.time <= sim.now+ term and (e.func != self.giveBirth and e.func != self.partner.giveBirth):
                             if e.time - sim.now < self.tod():
-                                self.partner.events[e] = e.time + term
                                 sim.resched(e, until = e.time + term)
                             else:
                                 sim.cancel(e)
@@ -258,7 +262,7 @@ class Agent:
 
     def giveBirth(self):
         Site.sugScape.update()
-        self.history[sim.now] = self.giveBirth
+        self.history.append(self.giveBirth)
         print("Parent", self.id, "is giving birth with partner", self.partner.id)
         sitesInSight = self.getNeighborhood()
         sitesInSight.extend(self.partner.getNeighborhood())
